@@ -1,52 +1,81 @@
 import Link from "next/link";
+import { HydrateClient } from "~/trpc/server";
+import { api } from "~/trpc/server";
 
-import { LatestPost } from "~/app/_components/post";
-import { api, HydrateClient } from "~/trpc/server";
+function cap(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 export default async function Home() {
-  const hello = await api.post.hello({ text: "from tRPC" });
+  const index = await api.pokemon.indexAll();
+  const first = index.slice(0, 12).map((p) => p.name);
 
-  void api.post.getLatest.prefetch();
+  const cards = await api.pokemon.hydrate({ names: first });
 
   return (
     <HydrateClient>
-      <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
-        <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
-          <h1 className="text-5xl font-extrabold tracking-tight sm:text-[5rem]">
-            Create <span className="text-[hsl(280,100%,70%)]">T3</span> App
-          </h1>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-8">
-            <Link
-              className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 hover:bg-white/20"
-              href="https://create.t3.gg/en/usage/first-steps"
-              target="_blank"
-            >
-              <h3 className="text-2xl font-bold">First Steps →</h3>
-              <div className="text-lg">
-                Just the basics - Everything you need to know to set up your
-                database and authentication.
-              </div>
-            </Link>
-            <Link
-              className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 hover:bg-white/20"
-              href="https://create.t3.gg/en/introduction"
-              target="_blank"
-            >
-              <h3 className="text-2xl font-bold">Documentation →</h3>
-              <div className="text-lg">
-                Learn more about Create T3 App, the libraries it uses, and how
-                to deploy it.
-              </div>
-            </Link>
-          </div>
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-2xl text-white">
-              {hello ? hello.greeting : "Loading tRPC query..."}
-            </p>
-          </div>
+      <main className="min-h-screen bg-white">
+        <header className="border-b">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
+            <div>
+              <h1 className="text-2xl font-semibold">Pokédeck</h1>
+              <p className="text-sm text-black/60">
+                Smoke UI: indexAll + hydrate via BFF (tRPC)
+              </p>
+            </div>
 
-          <LatestPost />
-        </div>
+            <div className="text-sm text-black/60">
+              Sorted by <span className="font-medium text-black/80">id</span>
+            </div>
+          </div>
+        </header>
+
+        <section className="mx-auto max-w-6xl px-4 py-8">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {cards.map((p) => (
+              <Link
+                key={p.id}
+                href={`/pokemon/${p.name}`}
+                className="rounded-2xl border bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+              >
+                <div className="rounded-xl bg-black/3 p-4">
+                  {p.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.imageUrl}
+                      alt={p.name}
+                      className="mx-auto h-28 w-28 object-contain"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="mx-auto h-28 w-28 rounded-xl bg-black/10" />
+                  )}
+                </div>
+
+                <div className="mt-3 text-xs text-black/60">
+                  #{String(p.id).padStart(4, "0")}
+                </div>
+
+                <div className="mt-1 text-lg font-semibold">{cap(p.name)}</div>
+
+                <div className="mt-1 text-xs text-black/60">
+                  {p.generation?.name ?? "unknown generation"}
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {p.types.map((t) => (
+                    <span
+                      key={t}
+                      className="rounded-full bg-black/5 px-3 py-1 text-xs font-medium text-black/80"
+                    >
+                      {cap(t)}
+                    </span>
+                  ))}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
       </main>
     </HydrateClient>
   );
