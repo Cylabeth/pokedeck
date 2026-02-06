@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { HydrateClient } from "~/trpc/server";
 import { api } from "~/trpc/server";
+import { formatTypeLabel, getTypeBadgeClass } from "~/app/_lib/pokemonTypeStyles";
+
 
 function cap(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -66,7 +68,7 @@ export default async function Home() {
                   {p.types.map((t) => (
                     <span
                       key={t}
-                      className="rounded-full bg-black/5 px-3 py-1 text-xs font-medium text-black/80"
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${getTypeBadgeClass(t)}`}
                     >
                       {cap(t)}
                     </span>
