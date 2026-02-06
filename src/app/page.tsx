@@ -1,3 +1,4 @@
+{/*}
 import Link from "next/link";
 import { HydrateClient } from "~/trpc/server";
 import { api } from "~/trpc/server";
@@ -31,7 +32,6 @@ export default async function Home() {
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
             <div>
               <div className="flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/brand/logo.svg"
                   alt="Pokédeck"
@@ -51,7 +51,6 @@ export default async function Home() {
         </div>
         <section className="mx-auto max-w-6xl px-4 py-10">
           <div className="relative overflow-hidden rounded-3xl border border-black/10 bg-white/70 shadow-panel-soft backdrop-blur">
-            {/* contenido delante */}
             <div className="relative z-10 px-6 py-8">
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 {cards.map((p) => (
@@ -60,9 +59,7 @@ export default async function Home() {
                     href={`/pokemon/${p.name}`}
                     className="rounded-2xl border border-black/10 bg-white/80 p-4 shadow-card-soft transition-shadow"
                   >
-                    {/* screen */}
                     <div className="relative rounded-2xl screen-dots p-4 ring-1 ring-black/5">
-                      {/* id badge */}
                       <div className="absolute left-1 top-1 px-3 py-1 text-sm font-semibold text-black/70">
                         #{String(p.id).padStart(4, "0")}
                       </div>
@@ -104,6 +101,50 @@ export default async function Home() {
           </div>
         </section>
 
+      </main>
+    </HydrateClient>
+  );
+}
+*/}
+
+import { HydrateClient, api } from "~/trpc/server";
+import { PokemonListClient } from "~/app/_components/pokemon/PokemonListClient";
+
+export default async function Home() {
+  const index = await api.pokemon.indexAll();
+  const first = index.slice(0, 12).map((p) => p.name);
+  const cards = await api.pokemon.hydrate({ names: first });
+
+  return (
+    <HydrateClient>
+      <main className="bg-dots relative min-h-screen">
+        <header>
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
+            <div>
+              <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/logo.svg" alt="Pokédeck" className="h-25 w-auto" />
+                <h1 className="pokemon-name text-7xl font-semibold">Pokédeck</h1>
+              </div>
+            </div>
+
+            <div className="text-sm text-black/60">
+              Sorted by <span className="font-medium text-black/80">id</span>
+            </div>
+          </div>
+        </header>
+
+        <div className="pointer-events-none absolute inset-0 z-0">
+          <div className="bg-watermark" />
+        </div>
+
+        <section className="mx-auto max-w-6xl px-4 py-10">
+          <div className="relative overflow-hidden rounded-3xl border border-black/10 bg-white/70 shadow-panel-soft backdrop-blur">
+            <div className="relative z-10 px-6 py-8">
+              <PokemonListClient initialCards={cards} />
+            </div>
+          </div>
+        </section>
       </main>
     </HydrateClient>
   );
