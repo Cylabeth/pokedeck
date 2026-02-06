@@ -1,11 +1,21 @@
 import Link from "next/link";
 import { HydrateClient } from "~/trpc/server";
 import { api } from "~/trpc/server";
-import { formatTypeLabel, getTypeBadgeClass } from "~/app/_lib/pokemonTypeStyles";
+import { getTypeBadgeClass } from "~/app/_lib/pokemonTypeStyles";
 
 
 function cap(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function formatGenerationName(gen?: string | null) {
+  if (!gen) return "Unknown generation";
+
+  const match = /^generation-([ivx]+)$/i.exec(gen);
+  const roman = match?.[1];
+  if (roman) return `Gen ${roman.toUpperCase()}`;
+
+  return gen.replace(/^generation-/, "Generation ").replaceAll("-", " ");
 }
 
 export default async function Home() {
@@ -16,7 +26,7 @@ export default async function Home() {
 
   return (
     <HydrateClient>
-      <main className="min-h-screen bg-white">
+      <main className="bg-dots relative min-h-screen">
         <header className="border-b">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
             <div>
@@ -31,53 +41,64 @@ export default async function Home() {
             </div>
           </div>
         </header>
+        <div className="pointer-events-none absolute inset-0 z-0">
+          <div className="bg-watermark" />
+        </div>
+        <section className="mx-auto max-w-6xl px-4 py-10">
+          <div className="relative overflow-hidden rounded-3xl border border-black/10 bg-white/70 shadow-panel-soft backdrop-blur">
+            {/* contenido delante */}
+            <div className="relative z-10 px-6 py-8">
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {cards.map((p) => (
+                  <Link
+                    key={p.id}
+                    href={`/pokemon/${p.name}`}
+                    className="rounded-2xl border border-black/10 bg-white/80 p-4 shadow-card-soft transition-shadow"
+                  >
+                    {/* screen */}
+                    <div className="relative rounded-2xl screen-dots p-4 ring-1 ring-black/5">
+                      {/* id badge */}
+                      <div className="absolute left-1 top-1 px-3 py-1 text-sm font-semibold text-black/70">
+                        #{String(p.id).padStart(4, "0")}
+                      </div>
 
-        <section className="mx-auto max-w-6xl px-4 py-8">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {cards.map((p) => (
-              <Link
-                key={p.id}
-                href={`/pokemon/${p.name}`}
-                className="rounded-2xl border bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-              >
-                <div className="rounded-xl bg-black/3 p-4">
-                  {p.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.imageUrl}
-                      alt={p.name}
-                      className="mx-auto h-28 w-28 object-contain"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="mx-auto h-28 w-28 rounded-xl bg-black/10" />
-                  )}
-                </div>
-
-                <div className="mt-3 text-xs text-black/60">
-                  #{String(p.id).padStart(4, "0")}
-                </div>
-
-                <div className="mt-1 text-lg font-semibold">{cap(p.name)}</div>
-
-                <div className="mt-1 text-xs text-black/60">
-                  {p.generation?.name ?? "unknown generation"}
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {p.types.map((t) => (
-                    <span
-                      key={t}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${getTypeBadgeClass(t)}`}
-                    >
-                      {cap(t)}
-                    </span>
-                  ))}
-                </div>
-              </Link>
-            ))}
+                      {p.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.imageUrl}
+                          alt={p.name}
+                          className="mx-auto h-37 w-37 object-contain"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="mx-auto h-37 w-37 rounded-xl bg-black/10" />
+                      )}
+                    </div>
+                    <div className="mt-3 text-center">
+                      <div className="pokemon-name mt-3 text-2xl font-semibold">
+                        {cap(p.name)}
+                      </div>
+                      <div className="mt-1 text-sm text-black/50 uppercase tracking-wide">
+                        {formatGenerationName(p.generation?.name)}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2 justify-center">
+                        {p.types.map((t) => (
+                          <span
+                            key={t}
+                            className={`rounded-full px-3 py-1 text-sm uppercase font-semibold text-white tracking-wide ${getTypeBadgeClass(t)}`}
+                          >
+                            {cap(t)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>    
+                  </Link>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
+
       </main>
     </HydrateClient>
   );
