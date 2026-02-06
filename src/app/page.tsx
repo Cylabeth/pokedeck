@@ -27,13 +27,18 @@ export default async function Home() {
   return (
     <HydrateClient>
       <main className="bg-dots relative min-h-screen">
-        <header className="border-b">
+        <header>
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
             <div>
-              <h1 className="text-2xl font-semibold">Pokédeck</h1>
-              <p className="text-sm text-black/60">
-                Smoke UI: indexAll + hydrate via BFF (tRPC)
-              </p>
+              <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/brand/logo.svg"
+                  alt="Pokédeck"
+                  className="h-25 w-auto"
+                />
+                 <h1 className="pokemon-name text-7xl font-semibold">Pokédeck</h1>
+              </div>
             </div>
 
             <div className="text-sm text-black/60">
