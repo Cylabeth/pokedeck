@@ -5,3 +5,9 @@ export type PokemonCardItem = {
   types: string[];
   generation: { id: number; name: string } | null;
 };
+
+export type PokemonIndexItem = {
+  id: number;
+  name: string;
+  url: string;
+};

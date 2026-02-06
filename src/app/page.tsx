@@ -112,7 +112,7 @@ import { PokemonListClient } from "~/app/_components/pokemon/PokemonListClient";
 
 export default async function Home() {
   const index = await api.pokemon.indexAll();
-  const first = index.slice(0, 12).map((p) => p.name);
+  const first = index.slice(0, 24).map((p) => p.name);
   const cards = await api.pokemon.hydrate({ names: first });
 
   return (
@@ -141,7 +141,7 @@ export default async function Home() {
         <section className="mx-auto max-w-6xl px-4 py-10">
           <div className="relative overflow-hidden rounded-3xl border border-black/10 bg-white/70 shadow-panel-soft backdrop-blur">
             <div className="relative z-10 px-6 py-8">
-              <PokemonListClient initialCards={cards} />
+              <PokemonListClient initialIndex={index} initialCards={cards} />
             </div>
           </div>
         </section>
