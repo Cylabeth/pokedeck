@@ -11,3 +11,5 @@ export type PokemonIndexItem = {
   name: string;
   url: string;
 };
+
+

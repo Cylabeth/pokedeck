@@ -2,14 +2,23 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { createPool } from "~/server/poke/concurrency";
 import { fetchJson } from "~/server/poke/pokeApiClient";
-import type { GenerationResponse, PokemonListResponse, PokemonResponse } from "~/server/poke/types";
 import { getPokemonImageUrl } from "~/server/poke/image";
+import type {
+  EvolutionChainResponse,
+  EvolutionChainNode ,
+  GenerationResponse,
+  PokemonListResponse,
+  PokemonResponse,
+  PokemonSpeciesResponse,
+} from "~/server/poke/types";
 
 const TTL_LONG = 1000 * 60 * 60 * 12; // 12h
 const TTL_VERY_LONG = 1000 * 60 * 60 * 24; // 24h
+const EXPAND_MAX = 24;
 
 const pool = createPool(10);
 const ID_FROM_URL_RE = /\/(\d+)\/?$/;
+
 
 function extractIdFromUrl(url: string): number {
   const res = ID_FROM_URL_RE.exec(url);
@@ -42,14 +51,31 @@ async function getGenerationsIndexBySpeciesName() {
   return map;
 }
 
-export const pokemonRouter = createTRPCRouter({
-indexAll: publicProcedure.query(async () => {
-  const res = await getPokemonIndexAll();
-  return res.results
-    .map((r) => ({ ...r, id: extractIdFromUrl(r.url) }))
-    .sort((a, b) => a.id - b.id);
-}),
+function flattenEvolutionChain(root: EvolutionChainNode): string[] {
+  const out: string[] = [];
+  const stack: EvolutionChainNode[] = [root];
 
+  while (stack.length) {
+    const node = stack.pop();
+    if (node === undefined) continue;
+
+    out.push(node.species.name);
+
+    const next = node.evolves_to ?? [];
+    for (let i = next.length - 1; i >= 0; i--) stack.push(next[i]!);
+  }
+
+  return [...new Set(out)];
+}
+
+
+export const pokemonRouter = createTRPCRouter({
+  indexAll: publicProcedure.query(async () => {
+    const res = await getPokemonIndexAll();
+    return res.results
+      .map((r) => ({ ...r, id: extractIdFromUrl(r.url) }))
+      .sort((a, b) => a.id - b.id);
+  }),
 
   generationsIndex: publicProcedure.query(async () => {
     return getGenerationsIndexBySpeciesName();
@@ -67,7 +93,9 @@ indexAll: publicProcedure.query(async () => {
       const items = await Promise.all(
         input.names.map((name) =>
           pool(async () => {
-            const p = await fetchJson<PokemonResponse>(`/pokemon/${name}`, { ttlMs: TTL_LONG });
+            const p = await fetchJson<PokemonResponse>(`/pokemon/${name}`, {
+              ttlMs: TTL_LONG,
+            });
             const generation = generationsByName[p.name] ?? null;
 
             return {
@@ -84,8 +112,48 @@ indexAll: publicProcedure.query(async () => {
         ),
       );
 
-      // Keep default sort by id to match requirement
       items.sort((a, b) => a.id - b.id);
       return items;
     }),
+
+  expandEvolutions: publicProcedure
+    .input(
+      z.object({
+        names: z.array(z.string().min(1)).min(1).max(EXPAND_MAX),
+      }),
+    )
+    .query(async ({ input }) => {
+      const settled = await Promise.allSettled(
+        input.names.map((name) =>
+          pool(async () => {
+            const species = await fetchJson<PokemonSpeciesResponse>(
+              `/pokemon-species/${name}`,
+              { ttlMs: TTL_LONG, retryOnce: true },
+            );
+
+            const chain = await fetchJson<EvolutionChainResponse>(
+              species.evolution_chain.url,
+              { ttlMs: TTL_VERY_LONG, retryOnce: true },
+            );
+
+            return flattenEvolutionChain(chain.chain);
+          }),
+        ),
+      );
+
+      const results = settled
+        .filter((r): r is PromiseFulfilledResult<string[]> => r.status === "fulfilled")
+        .map((r) => r.value);
+
+        if (process.env.NODE_ENV === "development") {
+        const failed = settled.filter((r) => r.status === "rejected").length;
+        if (failed > 0) console.warn(`[expandEvolutions] ${failed} failed expansions`);
+        }
+
+
+
+      const expandedNames = [...new Set(results.flat())];
+      return { expandedNames };
+    }),
 });
+

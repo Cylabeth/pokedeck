@@ -20,6 +20,7 @@ export function PokemonCard({ p }: { p: PokemonCardItem }) {
   return (
     <Link
       href={`/pokemon/${p.name}`}
+      prefetch
       className="rounded-2xl border border-black/10 bg-white/80 p-4 shadow-card-soft transition-shadow"
     >
       <div className="relative rounded-2xl screen-dots p-4 ring-1 ring-black/5">

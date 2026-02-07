@@ -56,16 +56,40 @@ export function PokemonListClient(props: {
     [filteredNames],
   );
 
-  // Hidratamos lo visible (BFF)
-  const hydrateQuery = api.pokemon.hydrate.useQuery(
+  const expandQuery = api.pokemon.expandEvolutions.useQuery(
     { names: visibleNames },
     {
-      // Si no hay resultados, no queremos hacer query “dummy”
-      enabled: visibleNames.length > 0,
-      // Como ya tenemos SSR, evita refetch innecesario inmediato
-      staleTime: 30_000,
+      enabled: normalized.length > 0 && visibleNames.length > 0,
+      staleTime: 60_000,
     },
   );
+
+
+  const finalNames = useMemo(() => {
+    if (!normalized) {
+      // sin búsqueda → SSR-safe page
+      return props.initialIndex
+        .slice(0, PAGE_SIZE)
+        .map((p) => p.name);
+    }
+
+    const expanded = expandQuery.data?.expandedNames ?? [];
+    const merged = [...new Set([...visibleNames, ...expanded])];
+
+    return merged.slice(0, PAGE_SIZE);
+  }, [normalized, visibleNames, expandQuery.data, props.initialIndex]);
+
+
+
+  // Hidratamos lo visible (BFF)
+const hydrateQuery = api.pokemon.hydrate.useQuery(
+  { names: finalNames },
+  {
+    enabled: finalNames.length > 0,
+    staleTime: 30_000,
+  },
+);
+
 
   {/*const cards = visibleNames.length > 0 ? hydrateQuery.data ?? [] : []; */}
   const hasQuery = normalized.length > 0;

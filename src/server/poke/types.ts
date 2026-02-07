@@ -26,3 +26,17 @@ export type PokemonResponse = {
     };
   };
 };
+
+export type PokemonSpeciesResponse = {
+  evolution_chain: { url: string };
+};
+
+export type EvolutionChainNode = {
+  species: NamedApiResource;
+  evolves_to: EvolutionChainNode[];
+};
+
+export type EvolutionChainResponse = {
+  id: number;
+  chain: EvolutionChainNode;
+};
