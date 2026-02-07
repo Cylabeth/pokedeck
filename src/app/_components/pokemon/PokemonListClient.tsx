@@ -3,28 +3,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "~/trpc/react";
 import { PokemonCard } from "./PokemonCard";
-import type { PokemonCardItem, PokemonIndexItem } from "./types";
+import type { PokemonCardItem } from "./types";
 
 const PAGE_SIZE = 24;
 
 function normalizeQuery(raw: string) {
-  return raw.trim().toLowerCase();
-}
-
-function parseMaybeId(q: string): number | null {
-  // soporta "25" o "#25" o "025"
-  const cleaned = q.replace(/^#/, "");
-  if (!/^\d+$/.test(cleaned)) return null;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  return raw.trim();
 }
 
 export function PokemonListClient(props: {
-  initialIndex: PokemonIndexItem[];
+  // los dejamos por SSR fallback
   initialCards: PokemonCardItem[];
 }) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
+
+  const [selectedType, setSelectedType] = useState<string>("");
+  const [selectedGen, setSelectedGen] = useState<string>("");
 
   // debounce
   useEffect(() => {
@@ -33,78 +28,63 @@ export function PokemonListClient(props: {
   }, [query]);
 
   const normalized = useMemo(() => normalizeQuery(debounced), [debounced]);
-  const maybeId = useMemo(() => parseMaybeId(normalized), [normalized]);
 
-  // Filtrado GLOBAL sobre el índice
-  const filteredNames = useMemo(() => {
-    if (!normalized) return props.initialIndex.map((p) => p.name);
+  // Cargar opciones de filtros (solo UI)
+  const typesQuery = api.pokemon.typesList.useQuery(undefined, {
+    staleTime: 24 * 60 * 60 * 1000,
+  });
 
-    // Si es número, filtramos por id exacto
-    if (maybeId !== null) {
-      const hit = props.initialIndex.find((p) => p.id === maybeId);
-      return hit ? [hit.name] : [];
+  const generationsQuery = api.pokemon.generationsList.useQuery(undefined, {
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+
+  // cursor para "load more"
+  const [cursor, setCursor] = useState(0);
+  const [items, setItems] = useState<PokemonCardItem[]>(props.initialCards);
+
+  // cada vez que cambian filtros o búsqueda, reseteamos paging + items
+  useEffect(() => {
+    setCursor(0);
+    // dejamos SSR mientras carga, pero limpiamos si hay filtros/búsqueda
+    if (normalized.length > 0 || selectedType || selectedGen) {
+      setItems([]);
+    } else {
+      setItems(props.initialCards);
     }
+  }, [normalized, selectedType, selectedGen, props.initialCards]);
 
-    return props.initialIndex
-      .filter((p) => p.name.includes(normalized))
-      .map((p) => p.name);
-  }, [normalized, maybeId, props.initialIndex]);
-
-  // Por ahora: mostramos solo un “page” de results
-  const visibleNames = useMemo(
-    () => filteredNames.slice(0, PAGE_SIZE),
-    [filteredNames],
-  );
-
-  const expandQuery = api.pokemon.expandEvolutions.useQuery(
-    { names: visibleNames },
+  // Query server-side
+  const searchQuery = api.pokemon.search.useQuery(
     {
-      enabled: normalized.length > 0 && visibleNames.length > 0,
-      staleTime: 60_000,
+      q: normalized,
+      type: selectedType ? selectedType : null,
+      generation: selectedGen ? selectedGen : null,
+      cursor,
+      limit: PAGE_SIZE,
+    },
+    {
+      staleTime: 30_000,
     },
   );
 
+  // cuando llega data, la aplicamos:
+  // - cursor 0 => replace
+  // - cursor >0 => append
+  useEffect(() => {
+    const data = searchQuery.data;
+    if (!data) return;
 
-  const finalNames = useMemo(() => {
-    if (!normalized) {
-      // sin búsqueda → SSR-safe page
-      return props.initialIndex
-        .slice(0, PAGE_SIZE)
-        .map((p) => p.name);
-    }
+    if (cursor === 0) setItems(data.items);
+    else setItems((prev) => [...prev, ...data.items]);
+  }, [searchQuery.data, cursor]);
 
-    const expanded = expandQuery.data?.expandedNames ?? [];
-    const merged = [...new Set([...visibleNames, ...expanded])];
-
-    return merged.slice(0, PAGE_SIZE);
-  }, [normalized, visibleNames, expandQuery.data, props.initialIndex]);
-
-
-
-  // Hidratamos lo visible (BFF)
-const hydrateQuery = api.pokemon.hydrate.useQuery(
-  { names: finalNames },
-  {
-    enabled: finalNames.length > 0,
-    staleTime: 30_000,
-  },
-);
-
-
-  {/*const cards = visibleNames.length > 0 ? hydrateQuery.data ?? [] : []; */}
-  const hasQuery = normalized.length > 0;
-
-  // Si NO hay búsqueda, preferimos mostrar SSR mientras TanStack termina de hidratar.
-  const cards: PokemonCardItem[] = hasQuery
-    ? hydrateQuery.data ?? []
-    : hydrateQuery.data ?? props.initialCards;
-
-
+  const canLoadMore = searchQuery.data?.nextCursor !== null;
 
   return (
     <div className="space-y-6">
-      {/* Search bar */}
+      {/* Search + filters row */}
       <div className="flex flex-wrap items-center gap-3">
+        {/* Search */}
         <div className="flex w-full max-w-xl items-center gap-2 rounded-2xl border border-black/10 bg-white/80 px-4 py-3 shadow-card-soft">
           <span className="text-black/40">🔍</span>
           <input
@@ -115,15 +95,33 @@ const hydrateQuery = api.pokemon.hydrate.useQuery(
           />
         </div>
 
-        {/* Placeholder del botón filtros, lo cableamos en paso filtros */}
-        <button
-          type="button"
-          className="rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-sm font-semibold text-black/70 shadow-card-soft"
-          disabled
-          title="Filters (coming next)"
+        {/* Type */}
+        <select
+          value={selectedType}
+          onChange={(e) => setSelectedType(e.target.value)}
+          className="rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-sm font-semibold text-black/70 shadow-card-soft outline-none"
         >
-          ☰ Filters
-        </button>
+          <option value="">All types</option>
+          {(typesQuery.data ?? []).map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+
+        {/* Generation */}
+        <select
+          value={selectedGen}
+          onChange={(e) => setSelectedGen(e.target.value)}
+          className="rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-sm font-semibold text-black/70 shadow-card-soft outline-none"
+        >
+          <option value="">All generations</option>
+          {(generationsQuery.data ?? []).map((g) => (
+            <option key={g.id} value={g.name}>
+              {g.name}
+            </option>
+          ))}
+        </select>
 
         <div className="ml-auto text-sm text-black/60">
           Sorted by <span className="font-medium text-black/80">id</span>
@@ -131,26 +129,43 @@ const hydrateQuery = api.pokemon.hydrate.useQuery(
       </div>
 
       {/* States */}
-      {normalized && filteredNames.length === 0 ? (
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-6 text-black/60">
-          No Pokémon match “{debounced}”.
-        </div>
-      ) : hydrateQuery.isLoading && hasQuery ? (
+      {searchQuery.isLoading && items.length === 0 ? (
         <div className="rounded-2xl border border-black/10 bg-white/70 p-6 text-black/60">
           Loading Pokémon…
         </div>
-      ) : hydrateQuery.isError ? (
+      ) : searchQuery.isError ? (
         <div className="rounded-2xl border border-black/10 bg-white/70 p-6 text-black/60">
           Something went wrong loading Pokémon.
         </div>
-      ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {cards.map((p) => (
-            <PokemonCard key={p.id} p={p} />
-          ))}
+      ) : items.length === 0 ? (
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-6 text-black/60">
+          No results.
         </div>
+      ) : (
+        <>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {items.map((p) => (
+              <PokemonCard key={p.id} p={p} />
+            ))}
+          </div>
+
+          {/* Load more */}
+          <div className="flex justify-center pt-4">
+            <button
+              type="button"
+              className="rounded-2xl border border-black/10 bg-white/80 px-6 py-3 text-sm font-semibold text-black/70 shadow-card-soft disabled:opacity-50"
+              disabled={!canLoadMore || searchQuery.isFetching}
+              onClick={() => {
+                const next = searchQuery.data?.nextCursor;
+                if (next === null || next === undefined) return;
+                setCursor(next);
+              }}
+            >
+              {searchQuery.isFetching ? "Loading…" : canLoadMore ? "Load more" : "End of list"}
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
 }
-

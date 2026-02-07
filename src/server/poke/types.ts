@@ -16,6 +16,7 @@ export type GenerationResponse = {
 export type PokemonResponse = {
   id: number;
   name: string;
+  species: NamedApiResource;
   types: Array<{ slot: number; type: NamedApiResource }>;
   stats: Array<{ base_stat: number; stat: NamedApiResource }>;
   sprites: {
@@ -39,4 +40,15 @@ export type EvolutionChainNode = {
 export type EvolutionChainResponse = {
   id: number;
   chain: EvolutionChainNode;
+};
+
+export type TypeListResponse = {
+  results: NamedApiResource[];
+};
+
+export type TypeResponse = {
+  pokemon: Array<{
+    pokemon: NamedApiResource; // name + url
+    slot: number;
+  }>;
 };
