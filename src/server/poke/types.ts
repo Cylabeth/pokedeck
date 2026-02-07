@@ -30,6 +30,12 @@ export type PokemonResponse = {
 
 export type PokemonSpeciesResponse = {
   evolution_chain: { url: string };
+  flavor_text_entries?: Array<{
+    flavor_text: string;
+    language: NamedApiResource;
+    version?: NamedApiResource;
+  }>;
+  genera?: Array<{ genus: string; language: NamedApiResource }>;
 };
 
 export type EvolutionChainNode = {
@@ -52,3 +58,4 @@ export type TypeResponse = {
     slot: number;
   }>;
 };
+

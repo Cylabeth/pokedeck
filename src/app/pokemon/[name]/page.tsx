@@ -1,93 +1,23 @@
-{/*
-import { notFound } from "next/navigation";
-import { api } from "~/trpc/server";
-
-type PageProps = {
-  params: Promise<{
-    name: string;
-  }>;
-};
-
-export default async function PokemonDetailPage({ params }: PageProps) {
-  const { name } = await params;
-
-  const data = await api.pokemon.hydrate({ names: [name] });
-
-  if (!data || data.length === 0) {
-    notFound();
-  }
-
-  const pokemon = data[0]!;
-
-  return (
-    <main className="mx-auto max-w-4xl px-4 py-10">
-      <h1 className="pokemon-name mb-6 text-5xl font-semibold">
-        {pokemon.name}
-      </h1>
-
-      {pokemon.imageUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={pokemon.imageUrl}
-          alt={pokemon.name}
-          className="h-64 w-64 object-contain"
-        />
-      )}
-
-      <div className="mt-6">
-        <h2 className="text-xl font-semibold">Types</h2>
-        <ul className="mt-2 flex gap-2">
-          {pokemon.types.map((t) => (
-            <li
-              key={t}
-              className="rounded-full bg-black/10 px-3 py-1 text-sm"
-            >
-              {t}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="mt-6 text-black/60">
-        Generation: {pokemon.generation?.name ?? "Unknown"}
-      </div>
-    </main>
-  );
-}
-*/}
-
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
 import { api } from "~/trpc/server";
 import { PokedexShell } from "~/app/_components/layout/PokedexShell";
-import { getTypeBadgeClass } from "~/app/_lib/pokemonTypeStyles";
+import { getTypeBadgeClass, formatTypeLabel } from "~/app/_lib/pokemonTypeStyles";
 
 type PageProps = {
-  params: Promise<{
-    name: string;
-  }>;
+  params: Promise<{ name: string }>;
 };
 
 function cap(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function formatGenerationName(gen?: string | null) {
-  if (!gen) return "Unknown generation";
-  const match = /^generation-([ivx]+)$/i.exec(gen);
-  const roman = match?.[1];
-  if (roman) return `Gen ${roman.toUpperCase()}`;
-  return gen.replace(/^generation-/, "Generation ").replaceAll("-", " ");
-}
-
 export default async function PokemonDetailPage({ params }: PageProps) {
   const { name } = await params;
 
-  const data = await api.pokemon.hydrate({ names: [name] });
-  if (!data || data.length === 0) notFound();
+  const pokemon = await api.pokemon.detail({ name });
 
-  const pokemon = data[0]!;
+  if (!pokemon) notFound();
 
   return (
     <PokedexShell
@@ -97,96 +27,135 @@ export default async function PokemonDetailPage({ params }: PageProps) {
         </Link>
       }
     >
-      {/* Placeholder layout interno (luego lo ampliamos con species/stats/evolutions) */}
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* Left: image + quick meta */}
-        <div className="space-y-6">
-          <div className="relative rounded-3xl screen-dots p-6 ring-1 ring-black/5">
-            <div className="absolute left-4 top-4 text-sm font-semibold text-black/70">
-              #{String(pokemon.id).padStart(4, "0")}
-            </div>
-
+      <div className="grid gap-10 lg:grid-cols-[360px_1fr]">
+        {/* LEFT COLUMN */}
+        <div>
+          {/* Image */}
+          <div className="rounded-2xl bg-white/80 p-6 shadow-card-soft">
             {pokemon.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={pokemon.imageUrl}
                 alt={pokemon.name}
-                className="mx-auto h-72 w-72 object-contain"
-                loading="lazy"
+                className="mx-auto h-64 w-64 object-contain"
               />
             ) : (
-              <div className="mx-auto h-72 w-72 rounded-2xl bg-black/10" />
+              <div className="h-64 w-64 rounded-xl bg-black/10" />
             )}
           </div>
 
-          <div className="rounded-3xl border border-black/10 bg-white/70 p-6">
-            <div className="text-sm text-black/50 uppercase tracking-wide">
-              {formatGenerationName(pokemon.generation?.name)}
+          {/* Types */}
+          <div className="mt-6">
+            <h3 className="mb-2 text-sm font-semibold uppercase text-black/60">
+              Types
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {pokemon.types.map((t) => (
+                <span
+                  key={t}
+                  className={`rounded-full px-3 py-1 text-sm font-semibold uppercase ${getTypeBadgeClass(
+                    t,
+                  )}`}
+                >
+                  {formatTypeLabel(t)}
+                </span>
+              ))}
             </div>
+          </div>
 
-            <div className="mt-4">
-              <div className="text-sm font-semibold text-black/70">Types</div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {pokemon.types.map((t) => (
-                  <span
-                    key={t}
-                    className={`rounded-full px-3 py-1 text-sm uppercase font-semibold tracking-wide ${getTypeBadgeClass(
-                      t,
-                    )}`}
-                  >
-                    {cap(t)}
-                  </span>
-                ))}
-              </div>
-            </div>
+          {/* Generation */}
+          <div className="mt-4 text-sm text-black/60">
+            Generation:{" "}
+            <span className="font-medium text-black/80">
+              {pokemon.generation?.name ?? "Unknown"}
+            </span>
           </div>
         </div>
 
-        {/* Right: title + placeholder for description/stats/evolutions */}
-        <div className="space-y-6">
-          <div>
-            <h1 className="pokemon-name text-6xl font-semibold">
+        {/* RIGHT COLUMN */}
+        <div>
+          {/* Header */}
+          <div className="mb-4">
+            <div className="text-sm text-black/50">
+              #{String(pokemon.id).padStart(4, "0")}
+            </div>
+            <h2 className="pokemon-name text-5xl font-semibold">
               {cap(pokemon.name)}
-            </h1>
-            <div className="mt-2 text-black/50">
-              Pokédex #{String(pokemon.id).padStart(4, "0")}
+            </h2>
+            {pokemon.genus && (
+              <div className="mt-1 text-black/60">{pokemon.genus}</div>
+            )}
+          </div>
+
+          {/* Flavor text */}
+          {pokemon.flavorText && (
+            <p className="mb-6 max-w-2xl text-black/70">
+              {pokemon.flavorText}
+            </p>
+          )}
+
+          {/* Stats */}
+          <div className="mb-8">
+            <h3 className="mb-3 text-sm font-semibold uppercase text-black/60">
+              Base stats
+            </h3>
+            <div className="space-y-2">
+              {pokemon.stats.map((s) => (
+                <div key={s.name} className="flex items-center gap-3">
+                  <div className="w-24 text-xs uppercase text-black/50">
+                    {s.name}
+                  </div>
+                  <div className="flex-1 rounded-full bg-black/10">
+                    <div
+                      className="h-2 rounded-full bg-black/60"
+                      style={{ width: `${Math.min(s.value, 100)}%` }}
+                    />
+                  </div>
+                  <div className="w-8 text-right text-xs text-black/70">
+                    {s.value}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="rounded-3xl border border-black/10 bg-white/70 p-6 text-black/70">
-            <div className="text-sm font-semibold text-black/70">
-              Description
-            </div>
-            <p className="mt-2 text-sm leading-relaxed text-black/60">
-              (Next step) We’ll pull the Pokédex flavor text from{" "}
-              <code className="rounded bg-black/5 px-1 py-0.5">
-                /pokemon-species
-              </code>{" "}
-              and render it here.
-            </p>
-          </div>
+          {/* Evolutions */}
+          <div>
+            <h3 className="mb-3 text-sm font-semibold uppercase text-black/60">
+              Evolutions
+            </h3>
 
-          <div className="rounded-3xl border border-black/10 bg-white/70 p-6 text-black/70">
-            <div className="text-sm font-semibold text-black/70">Stats</div>
-            <p className="mt-2 text-sm text-black/60">
-              (Next step) We’ll render stats as dots/bars using the existing
-              stats from <code className="rounded bg-black/5 px-1 py-0.5">
-                /pokemon
-              </code>.
-            </p>
-          </div>
+            <div className="flex flex-wrap items-center gap-4">
+              {pokemon.evolutions.map((evo) => {
+                const isCurrent = evo.name === pokemon.speciesName;
 
-          <div className="rounded-3xl border border-black/10 bg-white/70 p-6 text-black/70">
-            <div className="text-sm font-semibold text-black/70">
-              Evolution line
+                return (
+                  <Link
+                    key={evo.name}
+                    href={`/pokemon/${evo.name}`}
+                    className={`flex flex-col items-center gap-2 rounded-xl p-3 transition ${
+                      isCurrent
+                        ? "bg-black/10 ring-2 ring-black/30"
+                        : "bg-white/80 hover:shadow-card-soft"
+                    }`}
+                  >
+                    {evo.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={evo.imageUrl}
+                        alt={evo.name}
+                        className="h-20 w-20 object-contain"
+                      />
+                    ) : (
+                      <div className="h-20 w-20 rounded-lg bg-black/10" />
+                    )}
+                    <div className="text-xs font-semibold">
+                      {cap(evo.name)}
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
-            <p className="mt-2 text-sm text-black/60">
-              (Next step) We’ll fetch the evolution chain via{" "}
-              <code className="rounded bg-black/5 px-1 py-0.5">
-                /pokemon-species → evolution-chain
-              </code>{" "}
-              and render a clickable chain with the current Pokémon highlighted.
-            </p>
           </div>
         </div>
       </div>

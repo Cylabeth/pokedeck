@@ -387,5 +387,82 @@ if (q) {
     };
   }),
 
+  detail: publicProcedure
+  .input(z.object({ name: z.string().min(1) }))
+  .query(async ({ input }) => {
+    const generationsByName = await getGenerationsIndexBySpeciesName();
+
+    // 1) Base pokemon (permite forms)
+    const p = await fetchJson<PokemonResponse>(`/pokemon/${input.name}`, {
+      ttlMs: TTL_LONG,
+      retryOnce: true,
+    });
+
+    const generation = generationsByName[p.species.name] ?? null;
+
+    // 2) Species (texto + evolution url)
+    const species = await fetchJson<PokemonSpeciesResponse>(
+      `/pokemon-species/${p.species.name}`,
+      { ttlMs: TTL_LONG, retryOnce: true },
+    );
+
+    // English flavor text (si existe)
+    const flavorText =
+      species.flavor_text_entries
+        ?.find((e) => e.language.name === "en")
+        ?.flavor_text?.replace(/\s+/g, " ")
+        ?.trim() ?? null;
+
+    const genus =
+      species.genera?.find((g) => g.language.name === "en")?.genus ?? null;
+
+    // 3) Evolution chain -> flatten names (species names)
+    const chain = await fetchJson<EvolutionChainResponse>(
+      species.evolution_chain.url,
+      { ttlMs: TTL_VERY_LONG, retryOnce: true },
+    );
+
+    const evoNames = flattenEvolutionChain(chain.chain);
+
+    // 4) Hydrate evolutions (solo para mostrar id + imagen)
+    const evoPokemons = await Promise.all(
+      evoNames.slice(0, 20).map((name) =>
+        pool(async () => {
+          const evoP = await fetchJson<PokemonResponse>(`/pokemon/${name}`, {
+            ttlMs: TTL_LONG,
+            retryOnce: true,
+          });
+          return {
+            id: evoP.id,
+            name: evoP.name,
+            imageUrl: getPokemonImageUrl(evoP.sprites),
+          };
+        }),
+      ),
+    );
+
+    evoPokemons.sort((a, b) => a.id - b.id);
+
+    return {
+      id: p.id,
+      name: p.name,
+      speciesName: p.species.name, // para highlight robusto
+      imageUrl: getPokemonImageUrl(p.sprites),
+      types: p.types
+        .slice()
+        .sort((a, b) => a.slot - b.slot)
+        .map((t) => t.type.name),
+      generation,
+      stats: p.stats
+        .slice()
+        .sort((a, b) => a.stat.name.localeCompare(b.stat.name))
+        .map((s) => ({ name: s.stat.name, value: s.base_stat })),
+      flavorText,
+      genus,
+      evolutions: evoPokemons,
+    };
+  }),
+
+
 });
 
