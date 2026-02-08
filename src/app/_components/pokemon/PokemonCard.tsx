@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getTypeBadgeClass } from "~/app/_lib/pokemonTypeStyles";
 import type { PokemonCardItem } from "./types";
+import { usePokemonListStore } from "~/app/_components/pokemon/pokemonListStore";
+
 
 function cap(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -17,9 +19,13 @@ function formatGenerationName(gen?: string | null) {
 }
 
 export function PokemonCard({ p }: { p: PokemonCardItem }) {
+  const saveScroll = usePokemonListStore((s) => s.saveScroll);
+
   return (
+    
     <Link
       href={`/pokemon/${p.name}`}
+      onClick={() => saveScroll(window.scrollY)}
       prefetch
       className="rounded-2xl border border-black/10 bg-white/80 p-4 shadow-card-soft transition-shadow"
     >
