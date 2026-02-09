@@ -146,7 +146,7 @@ type PokemonListState = {
   // scroll restore
   scrollY: number;
   shouldRestoreScroll: boolean;
-
+  
   // actions
   setQuery: (q: string) => void;
   setType: (t: string | null) => void;
@@ -220,12 +220,28 @@ export const usePokemonListStore = create<PokemonListState>((set) => ({
       items: [...s.items, ...items],
       nextCursor,
     })),
-
+/*
   setInitialSSR: (items) =>
     set((s) => ({
       // solo si aún no tenemos nada cacheado en store
       items: s.items.length ? s.items : items,
     })),
+*/
+  setInitialSSR: (items) =>
+    set((s) => {
+      // Si ya hay cache (ej: volvemos desde detalle), NO lo pisamos
+      if (s.items.length) return s;
+
+      const PAGE_SIZE = 24;
+      const next =
+        items.length >= PAGE_SIZE ? PAGE_SIZE : null;
+
+      return {
+        items,
+        cursor: 0,
+        nextCursor: next,
+      };
+    }),
 
   saveScroll: (y) => set(() => ({ scrollY: y, shouldRestoreScroll: true })),
   markRestoreDone: () => set(() => ({ shouldRestoreScroll: false })),

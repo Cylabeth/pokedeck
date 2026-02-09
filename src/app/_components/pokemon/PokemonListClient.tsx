@@ -62,8 +62,21 @@ useEffect(() => {
 
   const normalized = useMemo(() => normalizeQuery(debounced), [debounced]);
   const hasAnyFilter =
-  normalized.length > 0 || Boolean(selectedType) || Boolean(selectedGen);
+  normalized.length > 0 || selectedType !== "" || selectedGen !== "";
 
+useEffect(() => {
+  // al cambiar filtros/búsqueda volvemos al inicio
+  setCursor(0);
+
+  // si NO hay filtros/búsqueda => SSR fallback inmediato
+  if (!hasAnyFilter) {
+    setInitialSSR(props.initialCards);
+    return;
+  }
+
+  // si hay filtros/búsqueda => limpiamos para mostrar loading/resultado nuevo
+  setInitialSSR([]);
+}, [hasAnyFilter, props.initialCards, setCursor, setInitialSSR]);
 
 
   // Cargar opciones de filtros (solo UI)
@@ -139,8 +152,8 @@ const canLoadMore = nextCursor !== null;
 
         {/* Type */}
         <select
-          value={selectedType}
-          onChange={(e) => setType(e.target.value || null)}
+          value={selectedType ?? ""}
+          onChange={(e) => setType(e.target.value === "" ? null : e.target.value)} 
           className="rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-sm font-semibold text-black/70 shadow-card-soft outline-none"
         >
           <option value="">All types</option>
@@ -153,8 +166,8 @@ const canLoadMore = nextCursor !== null;
 
         {/* Generation */}
         <select
-          value={selectedGen}
-          onChange={(e) => setGeneration(e.target.value || null)}
+          value={selectedGen ?? ""}
+          onChange={(e) => setGeneration(e.target.value === "" ? null : e.target.value)}
           className="rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-sm font-semibold text-black/70 shadow-card-soft outline-none"
         >
           <option value="">All generations</option>
@@ -199,10 +212,10 @@ const canLoadMore = nextCursor !== null;
               className="rounded-2xl border border-black/10 bg-white/80 px-6 py-3 text-sm font-semibold text-black/70 shadow-card-soft disabled:opacity-50"
               disabled={!canLoadMore || searchQuery.isFetching}
               onClick={() => {
-                if (nextCursor === null) return;
+              if (nextCursor === null) return;
                 setCursor(nextCursor);
               }}
-
+              
             >
               {searchQuery.isFetching ? "Loading…" : canLoadMore ? "Load more" : "End of list"}
             </button>
