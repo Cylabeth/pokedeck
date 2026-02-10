@@ -1,5 +1,7 @@
 # Pokédeck — Prueba técnica
 
+Deploy -----> https://pokedeck-zeta.vercel.app/
+
 Aplicación Pokédex desarrollada con **Next.js (App Router), tRPC, React Query y Zustand**, consumiendo **PokeAPI** a través de una capa **Backend-for-Frontend (BFF)** encargada de:
 
 - Búsqueda avanzada
@@ -146,6 +148,12 @@ En un entorno productivo se podrían incorporar:
 npm install
 npm run dev
 ```
+
+## Demo online
+
+La aplicación está disponible en:
+
+https://pokedeck-zeta.vercel.app/
 
 ---
 
