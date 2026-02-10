@@ -4,8 +4,7 @@
  */
 
 import "./src/env.js";
-
-const { IMAGE_HOSTS } = require("./src/_config/imageHosts");
+import { IMAGE_HOSTS } from "./src/_config/imageHosts.js";
 
 /** @type {import("next").NextConfig} */
 const config = {
@@ -18,4 +17,5 @@ const config = {
 };
 
 export default config;
+
 
