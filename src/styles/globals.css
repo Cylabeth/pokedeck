@@ -26,12 +26,14 @@
   position: absolute;
   right: -220px;
   top: -40px;
-  width: 640px;
-  height: 640px;
+  width: 540px;
+  height: 540px;
   border-radius: 9999px;
   border: 36px solid rgba(0, 0, 0, 0.04);
   background: rgba(255, 255, 255, 0.12);
 }
+
+
 
 /* Soft, wide shadows like the prototype (more spread, less harsh) */
 .shadow-panel-soft {

@@ -4,18 +4,18 @@
  */
 
 import "./src/env.js";
-import { IMAGE_HOSTS } from "./src/_config/imageHosts.js";
 
 /** @type {import("next").NextConfig} */
 const config = {
   images: {
-    remotePatterns: IMAGE_HOSTS.map((hostname) => ({
-      protocol: "https",
-      hostname,
-    })),
+    remotePatterns: [
+      { protocol: "https", hostname: "raw.githubusercontent.com" },
+      { protocol: "https", hostname: "pokeapi.co" },
+    ],
   },
 };
 
 export default config;
+
 
 
