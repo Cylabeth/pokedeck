@@ -14,7 +14,7 @@ import EvolutionStepper from "~/app/_components/pokemon/EvolutionStepper";
 
 type PageProps = {
   // En App Router, params NO es Promise: Next lo inyecta como objeto sincrónico
-  params: { name: string };
+  params: Promise<{ name: string }>;
 };
 
 /*
@@ -26,7 +26,7 @@ function cap(s: string) {
 }
 
 export default async function PokemonDetailPage({ params }: PageProps) {
-  const { name } = params;
+  const { name } = await params;
 
   /*
    * SSR del detalle:
