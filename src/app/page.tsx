@@ -9,13 +9,7 @@ export default async function Home() {
 
   return (
     <HydrateClient>
-      <PokedexShell
-        titleRight={
-          <>
-            Sorted by <span className="font-medium text-black/80">id</span>
-          </>
-        }
-      >
+      <PokedexShell>
         <PokemonListClient initialCards={cards} />
       </PokedexShell>
     </HydrateClient>

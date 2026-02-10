@@ -3,6 +3,11 @@ import { notFound } from "next/navigation";
 import { api } from "~/trpc/server";
 import { PokedexShell } from "~/app/_components/layout/PokedexShell";
 import { getTypeBadgeClass, formatTypeLabel } from "~/app/_lib/pokemonTypeStyles";
+import { formatGenerationLabel, getGenerationBadgeClass } from "~/app/_lib/pokemonGenerationStyles";
+import EvolutionStepper from "~/app/_components/pokemon/EvolutionStepper";
+/* <Link href="/" className="text-black/70 hover:text-black">
+          ← Back to list
+        </Link>*/
 
 type PageProps = {
   params: Promise<{ name: string }>;
@@ -22,16 +27,21 @@ export default async function PokemonDetailPage({ params }: PageProps) {
   return (
     <PokedexShell
       titleRight={
-        <Link href="/" className="text-black/70 hover:text-black">
-          ← Back to list
-        </Link>
+       
+        <Link
+  href="/"
+  className="mb-4 inline-flex items-center gap-2 rounded-full border border-black/10 px-3 py-1 text-sm font-medium text-black/70 hover:bg-[#3b9ccb]/10 uppercase"
+>
+  <b className="text-2xl">←</b> Back to list
+</Link>
+
       }
     >
       <div className="grid gap-10 lg:grid-cols-[360px_1fr]">
         {/* LEFT COLUMN */}
         <div>
           {/* Image */}
-          <div className="rounded-2xl bg-white/80 p-6 shadow-card-soft">
+          <div className="rounded-2xl bg-[#dff1f6] p-6 shadow-card-soft screen-dots">
             {pokemon.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -65,9 +75,13 @@ export default async function PokemonDetailPage({ params }: PageProps) {
 
           {/* Generation */}
           <div className="mt-4 text-sm text-black/60">
-            Generation:{" "}
-            <span className="font-medium text-black/80">
-              {pokemon.generation?.name ?? "Unknown"}
+            <h3 className="mb-2 text-sm font-semibold uppercase text-black/60">
+              Generation
+            </h3>
+            <span className={`rounded-full px-3 py-1 text-sm font-semibold uppercase ${getGenerationBadgeClass(
+                    pokemon.generation?.name ?? "",
+                  )}`}>
+              {formatGenerationLabel(pokemon.generation?.name) ?? "UNKNOWN"}
             </span>
           </div>
         </div>
@@ -107,7 +121,7 @@ export default async function PokemonDetailPage({ params }: PageProps) {
                   </div>
                   <div className="flex-1 rounded-full bg-black/10">
                     <div
-                      className="h-2 rounded-full bg-black/60"
+                      className="h-2 rounded-full bg-[#3b9ccb]/60"
                       style={{ width: `${Math.min(s.value, 100)}%` }}
                     />
                   </div>
@@ -120,6 +134,7 @@ export default async function PokemonDetailPage({ params }: PageProps) {
           </div>
 
           {/* Evolutions */}
+          {/*
           <div>
             <h3 className="mb-3 text-sm font-semibold uppercase text-black/60">
               Evolutions
@@ -135,10 +150,10 @@ export default async function PokemonDetailPage({ params }: PageProps) {
                     href={`/pokemon/${evo.name}`}
                     className={`flex flex-col items-center gap-2 rounded-xl p-3 transition ${
                       isCurrent
-                        ? "bg-black/10 ring-2 ring-black/30"
+                        ? "bg-[#dff1f6] ring-2 screen-dots ring-[#3b9ccb]/30"
                         : "bg-white/80 hover:shadow-card-soft"
                     }`}
-                  >
+                  > 
                     {evo.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -147,7 +162,7 @@ export default async function PokemonDetailPage({ params }: PageProps) {
                         className="h-20 w-20 object-contain"
                       />
                     ) : (
-                      <div className="h-20 w-20 rounded-lg bg-black/10" />
+                      <div className="h-20 w-20 rounded-lg bg-[#dff1f6] screen-dots " />
                     )}
                     <div className="text-xs font-semibold">
                       {cap(evo.name)}
@@ -157,6 +172,13 @@ export default async function PokemonDetailPage({ params }: PageProps) {
               })}
             </div>
           </div>
+          */}
+          <EvolutionStepper
+  evolutions={pokemon.evolutions}
+  currentName={pokemon.speciesName}
+  cap={cap}
+/>
+
         </div>
       </div>
     </PokedexShell>

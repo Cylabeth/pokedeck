@@ -2,12 +2,14 @@ import Link from "next/link";
 import { getTypeBadgeClass } from "~/app/_lib/pokemonTypeStyles";
 import type { PokemonCardItem } from "./types";
 import { usePokemonListStore } from "~/app/_components/pokemon/pokemonListStore";
+import { formatGenerationLabel } from "~/app/_lib/pokemonGenerationStyles";
+
 
 
 function cap(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
-
+/*
 function formatGenerationName(gen?: string | null) {
   if (!gen) return "Unknown generation";
 
@@ -17,7 +19,7 @@ function formatGenerationName(gen?: string | null) {
 
   return gen.replace(/^generation-/, "Generation ").replaceAll("-", " ");
 }
-
+*/
 export function PokemonCard({ p }: { p: PokemonCardItem }) {
   const saveScroll = usePokemonListStore((s) => s.saveScroll);
 
@@ -53,7 +55,7 @@ export function PokemonCard({ p }: { p: PokemonCardItem }) {
         </div>
 
         <div className="mt-1 text-sm text-black/50 uppercase tracking-wide">
-          {formatGenerationName(p.generation?.name)}
+          {formatGenerationLabel(p.generation?.name)}
         </div>
 
         <div className="mt-3 flex flex-wrap justify-center gap-2">

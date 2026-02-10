@@ -18,7 +18,7 @@ export function PokedexShell(props: {
           <div className="text-sm text-black/60">
             {props.titleRight ?? (
               <>
-                Sorted by <span className="font-medium text-black/80">id</span>
+                Made by <Link href="https://www.linkedin.com/in/elizabeth-gorosito/" target="_blank"><span className="font-medium text-black/80">Cynthia Elizabeth Gorosito</span></Link>
               </>
             )}
           </div>
