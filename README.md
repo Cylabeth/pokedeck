@@ -147,6 +147,8 @@ npm install
 npm run dev
 ```
 
+---
+
 ## Autora
 
 Cynthia Elizabeth Gorosito
