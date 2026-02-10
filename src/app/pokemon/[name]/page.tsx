@@ -158,7 +158,7 @@ export default async function PokemonDetailPage({ params }: PageProps) {
           {/* Evolutions */}
           <EvolutionStepper
             evolutions={pokemon.evolutions}
-            currentName={pokemon.speciesName} // importante: speciesName para forms/variants
+            currentName={pokemon.name} // importante: speciesName para forms/variants
             cap={cap}
           />
         </div>

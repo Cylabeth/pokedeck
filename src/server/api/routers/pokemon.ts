@@ -14,6 +14,51 @@ import type {
   TypeResponse,
 } from "~/server/poke/types";
 
+/*
+ * Resulta que hay pokemons que no tienen un endpoint directo /pokemon/{name} (ej: wormadam, deoxys, etc.). Un total de 33, la 
+ * mayoría son formas especiales (galarian, alolan, etc.) que no aparecen en el listado principal de pokemons, 
+ * pero algunos como wormadam o deoxys no tienen ni siquiera un /pokemon/{name} directo, 
+ * solo existen como varieties (wormadam-plant, wormadam-sandy, deoxys-normal, deoxys-attack, etc.). 
+ * *Para cubrir estos casos y evitar que aparezcan como “404” en la búsqueda o detalle, añadí lógica específica 
+ * que resuelve el speciesName a su pokemon default (variety is_default) antes de hidratar o mostrar resultados. 
+ * Esto asegura que incluso esos casos raros tengan una representación consistente en la app.
+ * Estos son los HTF (Hard to find) reales que encontré en producción durante la prueba:
+ *   'deoxys', status: 404
+ *   'wormadam', status: 404 
+ *   'giratina', status: 404 
+ *   'shaymin', status: 404 
+ *   'basculin', status: 404 
+ *   'darmanitan', status: 404   
+ *   'tornadus', status: 404 
+ *   'thundurus', status: 404 
+ *   'landorus', status: 404 
+ *   'keldeo', status: 404 
+ *   'meloetta', status: 404 
+ *   'meowstic', status: 404 
+ *   'aegislash', status: 404 
+ *   'pumpkaboo', status: 404 
+ *   'gourgeist', status: 404 
+ *   'zygarde', status: 404 
+ *   'oricorio', status: 404 
+ *   'lycanroc', status: 404 
+ *   'wishiwashi', status: 404 
+ *   'minior', status: 404 
+ *   'mimikyu', status: 404 
+ *   'toxtricity', status: 404 
+ *   'eiscue', status: 404 
+ *   'indeedee', status: 404 
+ *   'morpeko', status: 404 
+ *   'urshifu', status: 404 
+ *   'basculegion', status: 404 
+ *   'enamorus', status: 404 
+ *   'oinkologne', status: 404 
+ *   'maushold', status: 404 
+ *   'squawkabilly', status: 404 
+ *   'palafin', status: 404 
+ *   'tatsugiri', status: 404 
+ *   'dudunsparce', status: 404 
+*/
+
 
 /*
  * Caching en memoria (scope de la prueba):
@@ -22,7 +67,6 @@ import type {
  * - TTL_VERY_LONG: datos “casi estáticos” (types, generations, evolution chains).
  * En un producto real, este cache se movería a Redis/CDN, pero para la prueba mantenemos in-memory.
  */
-
 const TTL_LONG = 1000 * 60 * 60 * 12; // 12h
 const TTL_VERY_LONG = 1000 * 60 * 60 * 24; // 24h
 
@@ -46,7 +90,6 @@ const pool = createPool(10);
  */
 const ID_FROM_URL_RE = /\/(\d+)\/?$/;
 
-
 function extractIdFromUrl(url: string): number {
   const res = ID_FROM_URL_RE.exec(url);
   if (!res?.[1]) throw new Error(`Cannot extract id from url: ${url}`);
@@ -65,6 +108,29 @@ function parseMaybeIdFromQuery(q: string): number | null {
 }
 
 /*
+ * Helper (edge-case PokeAPI):
+ * Hay species que NO existen como /pokemon/{speciesName} (ej: wormadam, deoxys, etc.)
+ * y solo existen como varieties (wormadam-plant, deoxys-normal, ...).
+ *
+ * Este helper resuelve un speciesName a su pokemon "default" (variety is_default),
+ * para que:
+ * - search/expansión de evoluciones incluya esos casos
+ * - el listado pueda mostrar algo clickeable y consistente.
+ */
+async function speciesToDefaultPokemonName(speciesName: string): Promise<string> {
+  const sp = await fetchJson<PokemonSpeciesResponse>(`/pokemon-species/${speciesName}`, {
+    ttlMs: TTL_LONG,
+    retryOnce: true,
+  });
+
+  return (
+    sp.varieties?.find((v) => v.is_default)?.pokemon.name ??
+    sp.varieties?.[0]?.pokemon.name ??
+    speciesName
+  );
+}
+
+/*
  * Expansión de evoluciones (requisito del enunciado):
  * - La búsqueda debe incluir cadena evolutiva: "pikachu" => "pichu/pikachu/raichu".
  * - Se hace server-side (BFF) para que:
@@ -72,16 +138,16 @@ function parseMaybeIdFromQuery(q: string): number | null {
  *    2) evitemos lógica duplicada en el cliente
  *
  * Importante (edge case de PokeAPI):
- * - Hay “forms/variants” que existen en /pokemon/{name} pero NO en /pokemon-species/{name}.
- *   Por eso resolvemos primero la species “canónica” desde /pokemon/{name} y recién después
- *   consultamos /pokemon-species y la evolution chain.
+ * - Evolution chain devuelve SPECIES names.
+ * - Pero hay species que no existen como /pokemon/{species} y solo como varieties.
+ *   Por eso convertimos speciesName -> pokemonName default antes de filtrar/hidratar.
  *
  * Defensivo:
  * - De-duplicamos nombres y limitamos a 10 para evitar explosión de requests.
  * - Si una expansión falla por algún caso raro, devolvemos [name] y no rompemos el search entero.
  */
+/*
 async function expandEvolutionNames(baseNames: string[]): Promise<string[]> {
-  // defensivo
   const unique = [...new Set(baseNames)].slice(0, 10);
 
   const results = await Promise.all(
@@ -102,16 +168,23 @@ async function expandEvolutionNames(baseNames: string[]): Promise<string[]> {
             { ttlMs: TTL_LONG, retryOnce: true },
           );
 
-          // 3) /evolution-chain/{id} -> árbol evolutivo, lo aplanamos a lista de nombres
+          // 3) /evolution-chain/{id} -> árbol evolutivo (devuelve species names)
           const chain = await fetchJson<EvolutionChainResponse>(
             species.evolution_chain.url,
             { ttlMs: TTL_VERY_LONG, retryOnce: true },
           );
 
-          return flattenEvolutionChain(chain.chain);
+          const evoSpeciesNames = flattenEvolutionChain(chain.chain);
+
+          // 4) species -> pokemonName default (para cubrir species que dan 404 en /pokemon/{name})
+          const evoPokemonNames = await Promise.all(
+            evoSpeciesNames.map((sn) => speciesToDefaultPokemonName(sn)),
+          );
+
+
+          // Incluimos el name original también (por si el usuario buscó una forma concreta)
+          return [...new Set([name, ...evoPokemonNames])];
         } catch {
-          // tolerancia a fallos parciales: si una variante rara falla,
-          // no tiramos abajo todo el search.
           return [name];
         }
       }),
@@ -120,6 +193,64 @@ async function expandEvolutionNames(baseNames: string[]): Promise<string[]> {
 
   return [...new Set(results.flat())];
 }
+*/
+async function expandEvolutionNames(baseNames: string[]): Promise<string[]> {
+  const unique = [...new Set(baseNames)].slice(0, 10);
+
+  const results = await Promise.all(
+    unique.map((name) =>
+      pool(async () => {
+        try {
+          let pokemonName = name;
+
+          // 1) Intentamos /pokemon/{name}. Si falla, asumimos "species" y resolvemos variety default.
+          let p: PokemonResponse;
+          try {
+            p = await fetchJson<PokemonResponse>(`/pokemon/${pokemonName}`, {
+              ttlMs: TTL_LONG,
+              retryOnce: true,
+            });
+          } catch {
+            pokemonName = await speciesToDefaultPokemonName(name);
+            p = await fetchJson<PokemonResponse>(`/pokemon/${pokemonName}`, {
+              ttlMs: TTL_LONG,
+              retryOnce: true,
+            });
+          }
+
+          const speciesName = p.species?.name ?? name;
+
+          // 2) /pokemon-species/{speciesName}
+          const species = await fetchJson<PokemonSpeciesResponse>(
+            `/pokemon-species/${speciesName}`,
+            { ttlMs: TTL_LONG, retryOnce: true },
+          );
+
+          // 3) evolution chain (devuelve species names)
+          const chain = await fetchJson<EvolutionChainResponse>(
+            species.evolution_chain.url,
+            { ttlMs: TTL_VERY_LONG, retryOnce: true },
+          );
+
+          const evoSpeciesNames = flattenEvolutionChain(chain.chain);
+
+          // 4) species -> pokemon default name (para species que no existen como /pokemon/{name})
+          const evoPokemonNames = await Promise.all(
+            evoSpeciesNames.map((sn) => speciesToDefaultPokemonName(sn)),
+          );
+
+          // incluimos el pokemonName resuelto (por si el input era species)
+          return [...new Set([pokemonName, ...evoPokemonNames])];
+        } catch {
+          return [name];
+        }
+      }),
+    ),
+  );
+
+  return [...new Set(results.flat())];
+}
+
 
 /*
  * Filtro por tipo:
@@ -153,7 +284,6 @@ async function getPokemonIndexAll() {
  * - Esto evita N+1 y hace que search/hydrate/detail puedan resolver generation sin más llamadas.
  */
 async function getGenerationsIndexBySpeciesName() {
-  // Gen I..IX currently; we can probe 1..15 and stop on 404, but keep it simple for challenge.
   const genIds = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
   const gens = await Promise.all(
@@ -185,11 +315,9 @@ async function getTypesList(): Promise<string[]> {
 
   return res.results
     .map((t) => t.name)
-    // opcional: excluir tipos raros que no son “pokemon types” clásicos
     .filter((t) => t !== "unknown" && t !== "shadow")
     .sort((a, b) => a.localeCompare(b));
 }
-
 
 /*
  * Lista de generaciones para el UI:
@@ -213,6 +341,8 @@ async function getGenerationsList(): Promise<Array<{ id: number; name: string }>
 /*
  * PokeAPI devuelve evoluciones como árbol (n-ario).
  * Esta función lo aplana a lista de nombres (sin duplicados).
+ *
+ * OJO: aca devuelve species names, no necesariamente nombres válidos para /pokemon/{name}.
  */
 function flattenEvolutionChain(root: EvolutionChainNode): string[] {
   const out: string[] = [];
@@ -231,7 +361,6 @@ function flattenEvolutionChain(root: EvolutionChainNode): string[] {
   return [...new Set(out)];
 }
 
-
 /*
  * Input de búsqueda (server-side):
  * - cursor/limit para paginación
@@ -246,11 +375,10 @@ const SearchInput = z.object({
   limit: z.number().int().min(1).max(24).optional().default(24),
 });
 
-
 export const pokemonRouter = createTRPCRouter({
   /*
    * Índice completo (id + name):
-   * - Útil para construir el “universo” base y evitar llamadas repetidas.
+   * - Útil para construir el “universo” base y nos evitamos mil llamadas a la API.
    */
   indexAll: publicProcedure.query(async () => {
     const res = await getPokemonIndexAll();
@@ -270,7 +398,6 @@ export const pokemonRouter = createTRPCRouter({
   generationsList: publicProcedure.query(async () => {
     return getGenerationsList();
   }),
-
 
   /*
    * Hydrate:
@@ -312,12 +439,14 @@ export const pokemonRouter = createTRPCRouter({
       return items;
     }),
 
-
   /*
    * Expand evolutions (endpoint auxiliar):
    * - Dado un conjunto de nombres, devuelve el conjunto expandido con evoluciones.
    * - Usamos Promise.allSettled para que un fallo puntual no rompa toda la respuesta.
    * - En dev, logueamos si hubo fallos para depuración sin ensuciar UX en prod.
+   *
+   * Nota: este endpoint devuelve species names (tal cual PokeAPI).
+   * El search principal usa expandEvolutionNames() que convierte a pokemon default names.
    */
   expandEvolutions: publicProcedure
     .input(
@@ -329,15 +458,15 @@ export const pokemonRouter = createTRPCRouter({
       const settled = await Promise.allSettled(
         input.names.map((name) =>
           pool(async () => {
-            const species = await fetchJson<PokemonSpeciesResponse>(
-              `/pokemon-species/${name}`,
-              { ttlMs: TTL_LONG, retryOnce: true },
-            );
+            const species = await fetchJson<PokemonSpeciesResponse>(`/pokemon-species/${name}`, {
+              ttlMs: TTL_LONG,
+              retryOnce: true,
+            });
 
-            const chain = await fetchJson<EvolutionChainResponse>(
-              species.evolution_chain.url,
-              { ttlMs: TTL_VERY_LONG, retryOnce: true },
-            );
+            const chain = await fetchJson<EvolutionChainResponse>(species.evolution_chain.url, {
+              ttlMs: TTL_VERY_LONG,
+              retryOnce: true,
+            });
 
             return flattenEvolutionChain(chain.chain);
           }),
@@ -353,12 +482,9 @@ export const pokemonRouter = createTRPCRouter({
         if (failed > 0) console.warn(`[expandEvolutions] ${failed} failed expansions`);
       }
 
-
-
       const expandedNames = [...new Set(results.flat())];
       return { expandedNames };
     }),
-
 
   /*
    * Search server-side (realtime):
@@ -391,90 +517,98 @@ export const pokemonRouter = createTRPCRouter({
       filtered = filtered.filter((p) => generationsByName[p.name]?.name === input.generation);
     }
 
-
     // 2) Query:
-    // - Si es numérica: buscamos el hit exacto por id y expandimos evoluciones desde su nombre.
+    // - Si es numérica: buscamos el término exacto por id y expandimos evoluciones desde su nombre.
     // - Si es texto: buscamos coincidencias por substring y expandimos evoluciones desde esos matches
     if (q) {
       const maybeId = parseMaybeIdFromQuery(q);
 
       if (maybeId !== null) {
-
         const hit = filtered.find((p) => p.id === maybeId);
 
         if (!hit) {
           filtered = [];
         } else {
-          // expandimos desde el nombre del hit (hit + evoluciones)
           const expanded = await expandEvolutionNames([hit.name]);
           const expandedSet = new Set(expanded);
 
           filtered = filtered.filter((p) => expandedSet.has(p.name));
         }
       } else {
-        // matches directos (sobre el universo ACTUAL: respeta generation)
         const directMatches = filtered
           .filter((p) => p.name.includes(q))
           .map((p) => p.name);
 
+        /*  if (directMatches.length > 0) {
+            const expanded = await expandEvolutionNames(directMatches);
+            const expandedSet = new Set(expanded);
+  
+            filtered = filtered.filter((p) => expandedSet.has(p.name));
+          } else {
+            filtered = [];
+          }
+        }
+      }*/
         if (directMatches.length > 0) {
           const expanded = await expandEvolutionNames(directMatches);
           const expandedSet = new Set(expanded);
-
-          // quedate SOLO con los que estén en la expansión (y que ya respeten generation)
           filtered = filtered.filter((p) => expandedSet.has(p.name));
         } else {
-          filtered = [];
+          // Fallback: q podría ser una species (wormadam, deoxys, etc.)
+          try {
+            const defaultPokemon = await speciesToDefaultPokemonName(q);
+            const expanded = await expandEvolutionNames([defaultPokemon]);
+            const expandedSet = new Set(expanded);
+            filtered = filtered.filter((p) => expandedSet.has(p.name));
+          } catch {
+            filtered = [];
+          }
         }
       }
-    }
+      }
+        // 3) Filtro por tipo (aplicado al conjunto resultante; usa Set para lookup rápido)
+        if (input.type && filtered.length > 0) {
+          const idsByType = await getPokemonIdsByType(input.type);
+          filtered = filtered.filter((p) => idsByType.has(p.id));
+        }
 
+        // 4) Paginación (por nombres) + hydrate de la página visible
+        const page = filtered.slice(cursor, cursor + limit).map((p) => p.name);
 
-    // 3) Filtro por tipo (aplicado al conjunto resultante; usa Set para lookup rápido)
-    if (input.type && filtered.length > 0) {
-      const idsByType = await getPokemonIdsByType(input.type);
-      filtered = filtered.filter((p) => idsByType.has(p.id));
-    }
+        const items = page.length
+          ? await (async () => {
+            const gens = generationsByName;
+            const res = await Promise.all(
+              page.map((name) =>
+                pool(async () => {
+                  const p = await fetchJson<PokemonResponse>(`/pokemon/${name}`, { ttlMs: TTL_LONG });
+                  const generation = gens[p.species?.name ?? p.name] ?? null;
+                  return {
+                    id: p.id,
+                    name: p.name,
+                    imageUrl: getPokemonImageUrl(p.sprites),
+                    types: p.types
+                      .slice()
+                      .sort((a, b) => a.slot - b.slot)
+                      .map((t) => t.type.name),
+                    generation,
+                  };
+                }),
+              ),
+            );
+            res.sort((a, b) => a.id - b.id);
+            return res;
+          })()
+          : [];
 
+        const nextCursor = cursor + limit < filtered.length ? cursor + limit : null;
 
-    // 4) Paginación (por nombres) + hydrate de la página visible
-    const page = filtered.slice(cursor, cursor + limit).map((p) => p.name);
-
-    // hydrate
-    const items = page.length
-      ? await (async () => {
-        const gens = generationsByName;
-        const res = await Promise.all(
-          page.map((name) =>
-            pool(async () => {
-              const p = await fetchJson<PokemonResponse>(`/pokemon/${name}`, { ttlMs: TTL_LONG });
-              const generation = gens[p.species?.name ?? p.name] ?? null;
-              return {
-                id: p.id,
-                name: p.name,
-                imageUrl: getPokemonImageUrl(p.sprites),
-                types: p.types
-                  .slice()
-                  .sort((a, b) => a.slot - b.slot)
-                  .map((t) => t.type.name),
-                generation,
-              };
-            }),
-          ),
-        );
-        res.sort((a, b) => a.id - b.id);
-        return res;
-      })()
-      : [];
-
-    const nextCursor = cursor + limit < filtered.length ? cursor + limit : null;
-
-    return {
-      items,
-      nextCursor,
-      total: filtered.length,
-    };
-  }),
+        return {
+          items,
+          nextCursor,
+          total: filtered.length,
+        };
+      }),
 
   /*
    * Detail:
@@ -496,10 +630,10 @@ export const pokemonRouter = createTRPCRouter({
       const generation = generationsByName[p.species.name] ?? null;
 
       // 2) Species (texto + evolution url)
-      const species = await fetchJson<PokemonSpeciesResponse>(
-        `/pokemon-species/${p.species.name}`,
-        { ttlMs: TTL_LONG, retryOnce: true },
-      );
+      const species = await fetchJson<PokemonSpeciesResponse>(`/pokemon-species/${p.species.name}`, {
+        ttlMs: TTL_LONG,
+        retryOnce: true,
+      });
 
       // English flavor text (si existe)
       const flavorText =
@@ -508,22 +642,20 @@ export const pokemonRouter = createTRPCRouter({
           ?.flavor_text?.replace(/\s+/g, " ")
           ?.trim() ?? null;
 
-      const genus =
-        species.genera?.find((g) => g.language.name === "en")?.genus ?? null;
+      const genus = species.genera?.find((g) => g.language.name === "en")?.genus ?? null;
 
       // 3) Evolution chain -> flatten names (species names)
-      const chain = await fetchJson<EvolutionChainResponse>(
-        species.evolution_chain.url,
-        { ttlMs: TTL_VERY_LONG, retryOnce: true },
-      );
+      const chain = await fetchJson<EvolutionChainResponse>(species.evolution_chain.url, {
+        ttlMs: TTL_VERY_LONG,
+        retryOnce: true,
+      });
 
       const evoNames = flattenEvolutionChain(chain.chain);
 
       /*
        * Hydrate de evoluciones:
        * - Normalmente /pokemon/{speciesName} existe.
-       * - Pero hay casos como "wormadam" donde /pokemon/wormadam da 404 y solo existen variedades:
-       *   wormadam-plant / wormadam-sandy / wormadam-trash.
+       * - Pero hay casos como "wormadam" donde /pokemon/wormadam da 404 y solo existen variedades.
        * - En ese caso pedimos /pokemon-species/{name} y elegimos la variety default para mostrar.
        */
       const evoPokemons = await Promise.all(
@@ -545,8 +677,7 @@ export const pokemonRouter = createTRPCRouter({
               });
 
               const def =
-                sp.varieties?.find((v) => v.is_default)?.pokemon.name ??
-                sp.varieties?.[0]?.pokemon.name;
+                sp.varieties?.find((v) => v.is_default)?.pokemon.name ?? sp.varieties?.[0]?.pokemon.name;
 
               if (def) pokemonName = def;
 
@@ -564,7 +695,6 @@ export const pokemonRouter = createTRPCRouter({
           }),
         ),
       );
-
 
       evoPokemons.sort((a, b) => a.id - b.id);
 
@@ -588,4 +718,3 @@ export const pokemonRouter = createTRPCRouter({
       };
     }),
 });
-
