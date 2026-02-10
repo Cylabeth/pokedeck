@@ -1,5 +1,5 @@
 import Link from "next/link";
-
+import Image from "next/image";
 type Evolution = {
   name: string;
   imageUrl?: string | null;
@@ -33,7 +33,7 @@ export default function EvolutionStepper({
               }`}
             >
               {evo.imageUrl ? (
-                <img
+                <Image
                   src={evo.imageUrl}
                   alt={evo.name}
                   className="h-20 w-20 object-contain"
