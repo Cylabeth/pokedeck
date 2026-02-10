@@ -1,3 +1,12 @@
+/*
+ * Estilos y helpers de UI para “Generation”:
+ * - Mantengo este mapa aquí (en _lib) para no hardcodear clases Tailwind en componentes.
+ * - Así los componentes (PokemonCard / Detail) solo piden "dame la clase para generation-x".
+ * - Si mañana cambia el diseño, solo toco este archivo.
+ *
+ * Nota: los nombres vienen de PokeAPI (generation-i, generation-ii, etc.)
+ */
+
 const GENERATION_STYLES: Record<string, string> = {
   "generation-i": "bg-[#C03028] text-white",
   "generation-ii": "bg-[#E0C068] text-white",
@@ -10,13 +19,20 @@ const GENERATION_STYLES: Record<string, string> = {
   "generation-ix": "bg-[#F08030] text-white",
 };
 
+/*
+ * Devuelve la clase CSS/Tailwind para pintar el badge de generación.
+ * Fallback defensivo: si llega un valor inesperado, no rompe UI.
+ */
 export function getGenerationBadgeClass(genName: string): string {
   return GENERATION_STYLES[genName] ?? "bg-black/10 text-white";
 }
 
+/*
+ * Formato “corto” para dropdowns o labels compactos:
+ * - "generation-i" -> "GEN I"
+ */
 export function formatGenerationName(genName?: string): string {
   if (!genName) return "UNKNOWN";
-  // "generation-i" -> "GEN I"
   const roman = genName.replace("generation-", "").toUpperCase();
   return `GEN ${roman}`;
 }

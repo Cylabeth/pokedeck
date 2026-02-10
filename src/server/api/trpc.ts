@@ -22,6 +22,12 @@ import { ZodError } from "zod";
  *
  * @see https://trpc.io/docs/server/context
  */
+
+/**
+ * Contexto de tRPC:
+ * aquí es donde inyectaríamos dependencias por request (DB, sesión/auth, etc.).
+ * En esta prueba solo necesitamos headers (y que RSC + API handler compartan el mismo shape).
+ */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
   return {
     ...opts,
@@ -35,6 +41,9 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
  * ZodErrors so that you get typesafety on the frontend if your procedure fails due to validation
  * errors on the backend.
  */
+
+// superjson: serialización segura (por ejemplo Date) entre server/client.
+// errorFormatter: si Zod valida mal, devolvemos zodError “amigable” al frontend.
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,
   errorFormatter({ shape, error }) {
@@ -70,12 +79,14 @@ export const createCallerFactory = t.createCallerFactory;
  */
 export const createTRPCRouter = t.router;
 
+
 /**
- * Middleware for timing procedure execution and adding an artificial delay in development.
- *
- * You can remove this if you don't like it, but it can help catch unwanted waterfalls by simulating
- * network latency that would occur in production but not in local development.
+ * Middleware de timings:
+ * - en dev añade latencia artificial para detectar waterfalls (muy típico con RSC/tRPC).
+ * - loguea duración por endpoint para depurar performance.
+ * En prod no añade delay (t._config.isDev).
  */
+
 const timingMiddleware = t.middleware(async ({ next, path }) => {
   const start = Date.now();
 
@@ -94,10 +105,8 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
 });
 
 /**
- * Public (unauthenticated) procedure
- *
- * This is the base piece you use to build new queries and mutations on your tRPC API. It does not
- * guarantee that a user querying is authorized, but you can still access user session data if they
- * are logged in.
+ * publicProcedure:
+ * base para endpoints sin auth.
+ * Si tuviéramos login, acá crearíamos también `protectedProcedure` aplicando middleware de auth.
  */
 export const publicProcedure = t.procedure.use(timingMiddleware);

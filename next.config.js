@@ -1,6 +1,9 @@
 /**
- * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially useful
- * for Docker builds.
+ * Configuración de Next.js para permitir imágenes remotas:
+ * - raw.githubusercontent.com → sprites oficiales usados en evolution artwork
+ * - pokeapi.co → imágenes servidas directamente por PokeAPI
+ *
+ * Esto es necesario para que <Image /> funcione correctamente con dominios externos.
  */
 
 import "./src/env.js";

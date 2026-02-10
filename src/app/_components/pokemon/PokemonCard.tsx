@@ -4,35 +4,37 @@ import type { PokemonCardItem } from "./types";
 import { usePokemonListStore } from "~/app/_components/pokemon/pokemonListStore";
 import { formatGenerationLabel } from "~/app/_lib/pokemonGenerationStyles";
 
-
-
+/*
+ * Helper visual:
+ * - Capitaliza nombre/tipos para presentación consistente.
+ * - La API devuelve todo en lowercase.
+ */
 function cap(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
-/*
-function formatGenerationName(gen?: string | null) {
-  if (!gen) return "Unknown generation";
 
-  const match = /^generation-([ivx]+)$/i.exec(gen);
-  const roman = match?.[1];
-  if (roman) return `Gen ${roman.toUpperCase()}`;
-
-  return gen.replace(/^generation-/, "Generation ").replaceAll("-", " ");
-}
-*/
 export function PokemonCard({ p }: { p: PokemonCardItem }) {
+  /*
+   * Guardamos posición de scroll antes de navegar:
+   * - Permite volver desde el detail sin perder posición en la lista.
+   * - El restore real se realiza en PokemonListClient.
+   */
   const saveScroll = usePokemonListStore((s) => s.saveScroll);
 
   return (
-    
+    /*
+     * Link directo al detail:
+     * - Usamos navegación nativa de Next.js (prefetch activado).
+     * - El click también guarda scrollY en el store global.
+     */
     <Link
       href={`/pokemon/${p.name}`}
       onClick={() => saveScroll(window.scrollY)}
       prefetch
-      className="rounded-2xl border border-black/10 bg-white/80 p-4 shadow-card-soft transition-shadow"
+      className="shadow-card-soft rounded-2xl border border-black/10 bg-white/80 p-4 transition-shadow"
     >
-      <div className="relative rounded-2xl screen-dots p-4 ring-1 ring-black/5">
-        <div className="absolute left-1 top-1 px-3 py-1 text-sm font-semibold text-black/70">
+      <div className="screen-dots relative rounded-2xl p-4 ring-1 ring-black/5">
+        <div className="absolute top-1 left-1 px-3 py-1 text-sm font-semibold text-black/70">
           #{String(p.id).padStart(4, "0")}
         </div>
 
@@ -54,7 +56,7 @@ export function PokemonCard({ p }: { p: PokemonCardItem }) {
           {cap(p.name)}
         </div>
 
-        <div className="mt-1 text-sm text-black/50 uppercase tracking-wide">
+        <div className="mt-1 text-sm tracking-wide text-black/50 uppercase">
           {formatGenerationLabel(p.generation?.name)}
         </div>
 
@@ -62,7 +64,7 @@ export function PokemonCard({ p }: { p: PokemonCardItem }) {
           {p.types.map((t) => (
             <span
               key={t}
-              className={`rounded-full px-3 py-1 text-sm font-semibold uppercase tracking-wide text-white ${getTypeBadgeClass(
+              className={`rounded-full px-3 py-1 text-sm font-semibold tracking-wide text-white uppercase ${getTypeBadgeClass(
                 t,
               )}`}
             >

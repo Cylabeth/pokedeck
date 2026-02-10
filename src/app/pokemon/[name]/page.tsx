@@ -2,47 +2,69 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { api } from "~/trpc/server";
 import { PokedexShell } from "~/app/_components/layout/PokedexShell";
-import { getTypeBadgeClass, formatTypeLabel } from "~/app/_lib/pokemonTypeStyles";
-import { formatGenerationLabel, getGenerationBadgeClass } from "~/app/_lib/pokemonGenerationStyles";
+import {
+  getTypeBadgeClass,
+  formatTypeLabel,
+} from "~/app/_lib/pokemonTypeStyles";
+import {
+  formatGenerationLabel,
+  getGenerationBadgeClass,
+} from "~/app/_lib/pokemonGenerationStyles";
 import EvolutionStepper from "~/app/_components/pokemon/EvolutionStepper";
-/* <Link href="/" className="text-black/70 hover:text-black">
-          ← Back to list
-        </Link>*/
 
 type PageProps = {
-  params: Promise<{ name: string }>;
+  // En App Router, params NO es Promise: Next lo inyecta como objeto sincrónico
+  params: { name: string };
 };
 
+/*
+ * Helper de UI:
+ * Capitaliza para mostrar nombres bonitos (la API devuelve en minúsculas).
+ */
 function cap(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 export default async function PokemonDetailPage({ params }: PageProps) {
-  const { name } = await params;
+  const { name } = params;
 
-  const pokemon = await api.pokemon.detail({ name });
+  /*
+   * SSR del detalle:
+   * - Llamamos al BFF (tRPC server) que:
+   *   1) cachea y usa pool de concurrencia
+   *   2) normaliza imagen, tipos, flavorText, evoluciones
+   *   3) resuelve edge cases (species sin /pokemon directo)
+   *
+   * Importante: si el name no existe, tRPC suele tirar error.
+   * Lo capturamos y redirigimos a notFound() para evitar pantallas rojas.
+   */
+  let pokemon: Awaited<ReturnType<typeof api.pokemon.detail>>;
 
-  if (!pokemon) notFound();
+  try {
+    pokemon = await api.pokemon.detail({ name });
+  } catch {
+    notFound();
+  }
 
   return (
     <PokedexShell
       titleRight={
-       
         <Link
-  href="/"
-  className="mb-4 inline-flex items-center gap-2 rounded-full border border-black/10 px-3 py-1 text-sm font-medium text-black/70 hover:bg-[#3b9ccb]/10 uppercase"
->
-  <b className="text-2xl">←</b> Back to list
-</Link>
-
+          href="/"
+          className="mb-4 inline-flex items-center gap-2 rounded-full border border-black/10 px-3 py-1 text-sm font-medium text-black/70 uppercase hover:bg-[#3b9ccb]/10"
+        >
+          <b className="text-2xl">←</b> Back to list
+        </Link>
       }
     >
       <div className="grid gap-10 lg:grid-cols-[360px_1fr]">
-        {/* LEFT COLUMN */}
+        {/* LEFT COLUMN: “tarjeta” visual (imagen + meta) */}
         <div>
-          {/* Image */}
-          <div className="rounded-2xl bg-[#dff1f6] p-6 shadow-card-soft screen-dots">
+          {/* Imagen principal */}
+          <div className="shadow-card-soft screen-dots rounded-2xl bg-[#dff1f6] p-6">
             {pokemon.imageUrl ? (
+              // Para imágenes externas: usamos <img> simple en esta pantalla
+              // (evitamos configurar remotePatterns de Next Image en la prueba)
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={pokemon.imageUrl}
@@ -56,7 +78,7 @@ export default async function PokemonDetailPage({ params }: PageProps) {
 
           {/* Types */}
           <div className="mt-6">
-            <h3 className="mb-2 text-sm font-semibold uppercase text-black/60">
+            <h3 className="mb-2 text-sm font-semibold text-black/60 uppercase">
               Types
             </h3>
             <div className="flex flex-wrap gap-2">
@@ -75,18 +97,20 @@ export default async function PokemonDetailPage({ params }: PageProps) {
 
           {/* Generation */}
           <div className="mt-4 text-sm text-black/60">
-            <h3 className="mb-2 text-sm font-semibold uppercase text-black/60">
+            <h3 className="mb-2 text-sm font-semibold text-black/60 uppercase">
               Generation
             </h3>
-            <span className={`rounded-full px-3 py-1 text-sm font-semibold uppercase ${getGenerationBadgeClass(
-                    pokemon.generation?.name ?? "",
-                  )}`}>
+            <span
+              className={`rounded-full px-3 py-1 text-sm font-semibold uppercase ${getGenerationBadgeClass(
+                pokemon.generation?.name ?? "",
+              )}`}
+            >
               {formatGenerationLabel(pokemon.generation?.name) ?? "UNKNOWN"}
             </span>
           </div>
         </div>
 
-        {/* RIGHT COLUMN */}
+        {/* RIGHT COLUMN: info + stats + evoluciones */}
         <div>
           {/* Header */}
           <div className="mb-4">
@@ -103,20 +127,18 @@ export default async function PokemonDetailPage({ params }: PageProps) {
 
           {/* Flavor text */}
           {pokemon.flavorText && (
-            <p className="mb-6 max-w-2xl text-black/70">
-              {pokemon.flavorText}
-            </p>
+            <p className="mb-6 max-w-2xl text-black/70">{pokemon.flavorText}</p>
           )}
 
           {/* Stats */}
           <div className="mb-8">
-            <h3 className="mb-3 text-sm font-semibold uppercase text-black/60">
+            <h3 className="mb-3 text-sm font-semibold text-black/60 uppercase">
               Base stats
             </h3>
             <div className="space-y-2">
               {pokemon.stats.map((s) => (
                 <div key={s.name} className="flex items-center gap-3">
-                  <div className="w-24 text-xs uppercase text-black/50">
+                  <div className="w-24 text-xs text-black/50 uppercase">
                     {s.name}
                   </div>
                   <div className="flex-1 rounded-full bg-black/10">
@@ -134,51 +156,11 @@ export default async function PokemonDetailPage({ params }: PageProps) {
           </div>
 
           {/* Evolutions */}
-          {/*
-          <div>
-            <h3 className="mb-3 text-sm font-semibold uppercase text-black/60">
-              Evolutions
-            </h3>
-
-            <div className="flex flex-wrap items-center gap-4">
-              {pokemon.evolutions.map((evo) => {
-                const isCurrent = evo.name === pokemon.speciesName;
-
-                return (
-                  <Link
-                    key={evo.name}
-                    href={`/pokemon/${evo.name}`}
-                    className={`flex flex-col items-center gap-2 rounded-xl p-3 transition ${
-                      isCurrent
-                        ? "bg-[#dff1f6] ring-2 screen-dots ring-[#3b9ccb]/30"
-                        : "bg-white/80 hover:shadow-card-soft"
-                    }`}
-                  > 
-                    {evo.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={evo.imageUrl}
-                        alt={evo.name}
-                        className="h-20 w-20 object-contain"
-                      />
-                    ) : (
-                      <div className="h-20 w-20 rounded-lg bg-[#dff1f6] screen-dots " />
-                    )}
-                    <div className="text-xs font-semibold">
-                      {cap(evo.name)}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-          */}
           <EvolutionStepper
-  evolutions={pokemon.evolutions}
-  currentName={pokemon.speciesName}
-  cap={cap}
-/>
-
+            evolutions={pokemon.evolutions}
+            currentName={pokemon.speciesName} // importante: speciesName para forms/variants
+            cap={cap}
+          />
         </div>
       </div>
     </PokedexShell>

@@ -1,3 +1,12 @@
+/*
+ * Estilos y helpers de UI para “Types”:
+ * - Igual que con generaciones, centralizamos el mapeo type -> clases
+ * - Evita repetir strings de Tailwind en múltiples componentes
+ * - Mantiene consistencia visual (el mismo tipo siempre se ve igual)
+ *
+ * Nota: los nombres vienen de PokeAPI en minúsculas (fire, water, etc.)
+ */
+
 const TYPE_STYLES: Record<string, string> = {
   bug: "bg-[#A8B820] ",
   dragon: "bg-[#7038F8] text-white",
@@ -19,10 +28,19 @@ const TYPE_STYLES: Record<string, string> = {
   water: "bg-[#6890F0] text-white",
 };
 
+/*
+ * Devuelve la clase del badge para un tipo concreto.
+ * Fallback defensivo: si llega un tipo no contemplado, mostramos un estilo neutro.
+ */
 export function getTypeBadgeClass(type: string): string {
   return TYPE_STYLES[type] ?? "bg-black/10 text-white";
 }
 
+/*
+ * Formatea el texto visible del tipo:
+ * - "water" -> "Water"
+ * (la API viene en minúsculas)
+ */
 export function formatTypeLabel(type: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
