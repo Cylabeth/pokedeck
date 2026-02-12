@@ -146,54 +146,7 @@ async function speciesToDefaultPokemonName(speciesName: string): Promise<string>
  * - De-duplicamos nombres y limitamos a 10 para evitar explosión de requests.
  * - Si una expansión falla por algún caso raro, devolvemos [name] y no rompemos el search entero.
  */
-/*
-async function expandEvolutionNames(baseNames: string[]): Promise<string[]> {
-  const unique = [...new Set(baseNames)].slice(0, 10);
 
-  const results = await Promise.all(
-    unique.map((name) =>
-      pool(async () => {
-        try {
-          // 1) resolvemos species canonical desde /pokemon/{name}
-          const p = await fetchJson<PokemonResponse>(`/pokemon/${name}`, {
-            ttlMs: TTL_LONG,
-            retryOnce: true,
-          });
-
-          const speciesName = p.species?.name ?? name;
-
-          // 2) /pokemon-species/{speciesName} -> tiene evolution_chain.url
-          const species = await fetchJson<PokemonSpeciesResponse>(
-            `/pokemon-species/${speciesName}`,
-            { ttlMs: TTL_LONG, retryOnce: true },
-          );
-
-          // 3) /evolution-chain/{id} -> árbol evolutivo (devuelve species names)
-          const chain = await fetchJson<EvolutionChainResponse>(
-            species.evolution_chain.url,
-            { ttlMs: TTL_VERY_LONG, retryOnce: true },
-          );
-
-          const evoSpeciesNames = flattenEvolutionChain(chain.chain);
-
-          // 4) species -> pokemonName default (para cubrir species que dan 404 en /pokemon/{name})
-          const evoPokemonNames = await Promise.all(
-            evoSpeciesNames.map((sn) => speciesToDefaultPokemonName(sn)),
-          );
-
-
-          // Incluimos el name original también (por si el usuario buscó una forma concreta)
-          return [...new Set([name, ...evoPokemonNames])];
-        } catch {
-          return [name];
-        }
-      }),
-    ),
-  );
-
-  return [...new Set(results.flat())];
-}
-*/
 async function expandEvolutionNames(baseNames: string[]): Promise<string[]> {
   const unique = [...new Set(baseNames)].slice(0, 10);
 
@@ -236,7 +189,8 @@ async function expandEvolutionNames(baseNames: string[]): Promise<string[]> {
 
           // 4) species -> pokemon default name (para species que no existen como /pokemon/{name})
           const evoPokemonNames = await Promise.all(
-            evoSpeciesNames.map((sn) => speciesToDefaultPokemonName(sn)),
+            //  evoSpeciesNames.map((sn) => speciesToDefaultPokemonName(sn)),
+            [...new Set(evoSpeciesNames)].map((sn) => speciesToDefaultPokemonName(sn)),
           );
 
           // incluimos el pokemonName resuelto (por si el input era species)
@@ -565,50 +519,50 @@ export const pokemonRouter = createTRPCRouter({
           }
         }
       }
-      }
-        // 3) Filtro por tipo (aplicado al conjunto resultante; usa Set para lookup rápido)
-        if (input.type && filtered.length > 0) {
-          const idsByType = await getPokemonIdsByType(input.type);
-          filtered = filtered.filter((p) => idsByType.has(p.id));
-        }
+    }
+    // 3) Filtro por tipo (aplicado al conjunto resultante; usa Set para lookup rápido)
+    if (input.type && filtered.length > 0) {
+      const idsByType = await getPokemonIdsByType(input.type);
+      filtered = filtered.filter((p) => idsByType.has(p.id));
+    }
 
-        // 4) Paginación (por nombres) + hydrate de la página visible
-        const page = filtered.slice(cursor, cursor + limit).map((p) => p.name);
+    // 4) Paginación (por nombres) + hydrate de la página visible
+    const page = filtered.slice(cursor, cursor + limit).map((p) => p.name);
 
-        const items = page.length
-          ? await (async () => {
-            const gens = generationsByName;
-            const res = await Promise.all(
-              page.map((name) =>
-                pool(async () => {
-                  const p = await fetchJson<PokemonResponse>(`/pokemon/${name}`, { ttlMs: TTL_LONG });
-                  const generation = gens[p.species?.name ?? p.name] ?? null;
-                  return {
-                    id: p.id,
-                    name: p.name,
-                    imageUrl: getPokemonImageUrl(p.sprites),
-                    types: p.types
-                      .slice()
-                      .sort((a, b) => a.slot - b.slot)
-                      .map((t) => t.type.name),
-                    generation,
-                  };
-                }),
-              ),
-            );
-            res.sort((a, b) => a.id - b.id);
-            return res;
-          })()
-          : [];
+    const items = page.length
+      ? await (async () => {
+        const gens = generationsByName;
+        const res = await Promise.all(
+          page.map((name) =>
+            pool(async () => {
+              const p = await fetchJson<PokemonResponse>(`/pokemon/${name}`, { ttlMs: TTL_LONG });
+              const generation = gens[p.species?.name ?? p.name] ?? null;
+              return {
+                id: p.id,
+                name: p.name,
+                imageUrl: getPokemonImageUrl(p.sprites),
+                types: p.types
+                  .slice()
+                  .sort((a, b) => a.slot - b.slot)
+                  .map((t) => t.type.name),
+                generation,
+              };
+            }),
+          ),
+        );
+        res.sort((a, b) => a.id - b.id);
+        return res;
+      })()
+      : [];
 
-        const nextCursor = cursor + limit < filtered.length ? cursor + limit : null;
+    const nextCursor = cursor + limit < filtered.length ? cursor + limit : null;
 
-        return {
-          items,
-          nextCursor,
-          total: filtered.length,
-        };
-      }),
+    return {
+      items,
+      nextCursor,
+      total: filtered.length,
+    };
+  }),
 
   /*
    * Detail:
